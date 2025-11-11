@@ -1,12 +1,14 @@
 from pathlib import Path
 import zipfile
 
-from tsa import settings
+from tsa.settings import Settings
 
 import click
 import httpx
 
 ALL_YEARS: int = -1
+
+settings = Settings()
 
 
 def download_file(url: str, dest_path: Path) -> None:
@@ -18,16 +20,36 @@ def download_file(url: str, dest_path: Path) -> None:
                 file.write(chunk)
 
 def unzip_file(zip_path: Path, extract_to: Path) -> None:
-    """Unzip a zip file to a specified directory."""    
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_to)
+    """Unzip only the files that match the configured station name."""
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        station_files = [
+            zip_info for zip_info in zip_ref.infolist() if settings.station in zip_info.filename
+        ]
+        if not station_files:
+            raise FileNotFoundError(
+                f"Arquivo com estação {settings.station} não encontrado em {zip_path.name}"
+            )
+        for zip_info in station_files:
+            file_name = Path(zip_info.filename).stem
+            zip_ref.extract(zip_info, extract_to / file_name)
 
 def download_and_unzip(url: str) -> None:
     file_name = Path(url).name
     dest_path = settings.data_path / file_name
-    download_file(url, dest_path)
-    unzip_file(dest_path, settings.data_path)
-    dest_path.unlink()
+    try:
+        download_file(url, dest_path)
+        unzip_file(dest_path, settings.data_path)
+    finally:
+        dest_path.unlink()
+    # move all csv/CSV files to the data_path root
+    for extracted_file in settings.data_path.glob("**/*.csv", case_sensitive=False):
+        extracted_file.rename(settings.data_path / extracted_file.name)
+    # remove empty directories
+    for dir_path in settings.data_path.glob("**/"):
+        try:
+            dir_path.rmdir()
+        except OSError:
+            pass
 
 @click.command()
 @click.option(
@@ -55,7 +77,10 @@ def main(year: int = ALL_YEARS) -> None:
         years = [year]
 
     for year in years:
-        url = f"https://portal.inmet.gov.br/uploads/dadoshistoricos/{year}.zip"
-        download_and_unzip(url)
-        print("Todos os arquivos foram baixados e extraídos.")
-        return
+        try:
+            url = f"https://portal.inmet.gov.br/uploads/dadoshistoricos/{year}.zip"
+            download_and_unzip(url)
+        except FileNotFoundError:
+            continue
+    
+    print("Todos os arquivos foram baixados e extraídos.")

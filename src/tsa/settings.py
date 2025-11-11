@@ -22,3 +22,4 @@ class Settings(BaseSettings):
 
     data_path: Path = PROJECT_PATH / 'data'
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    station: str = "A711"

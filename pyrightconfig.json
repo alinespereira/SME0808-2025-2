@@ -1,0 +1,6 @@
+{
+  "pythonVersion": "3.12",
+  "ignore": [
+    "src/tsa/database/models/**"
+  ]
+}

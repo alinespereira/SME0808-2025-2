@@ -1,14 +1,12 @@
-from pathlib import Path
 import zipfile
-
-from tsa.settings import Settings
+from pathlib import Path
 
 import click
 import httpx
 
-ALL_YEARS: int = -1
+from tsa import settings
 
-settings = Settings()
+ALL_YEARS: int = -1
 
 
 def download_file(url: str, dest_path: Path) -> None:
@@ -19,11 +17,14 @@ def download_file(url: str, dest_path: Path) -> None:
             for chunk in response.iter_bytes():
                 file.write(chunk)
 
+
 def unzip_file(zip_path: Path, extract_to: Path) -> None:
     """Unzip only the files that match the configured station name."""
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
         station_files = [
-            zip_info for zip_info in zip_ref.infolist() if settings.station in zip_info.filename
+            zip_info
+            for zip_info in zip_ref.infolist()
+            if settings.station in zip_info.filename
         ]
         if not station_files:
             raise FileNotFoundError(
@@ -32,6 +33,7 @@ def unzip_file(zip_path: Path, extract_to: Path) -> None:
         for zip_info in station_files:
             file_name = Path(zip_info.filename).stem
             zip_ref.extract(zip_info, extract_to / file_name)
+
 
 def download_and_unzip(url: str) -> None:
     file_name = Path(url).name
@@ -42,7 +44,9 @@ def download_and_unzip(url: str) -> None:
     finally:
         dest_path.unlink()
     # move all csv/CSV files to the data_path root
-    for extracted_file in settings.data_path.glob("**/*.csv", case_sensitive=False):
+    for extracted_file in settings.data_path.glob(
+        "**/*.csv", case_sensitive=False
+    ):
         extracted_file.rename(settings.data_path / extracted_file.name)
     # remove empty directories
     for dir_path in settings.data_path.glob("**/"):
@@ -50,6 +54,7 @@ def download_and_unzip(url: str) -> None:
             dir_path.rmdir()
         except OSError:
             pass
+
 
 @click.command()
 @click.option(
@@ -72,7 +77,11 @@ def main(year: int = ALL_YEARS) -> None:
         if download_all:
             years = range(2000, 2026)
         else:
-            years = [click.prompt("Por favor, insira o ano desejado (2000-2025)", type=int)]
+            years = [
+                click.prompt(
+                    "Por favor, insira o ano desejado (2000-2025)", type=int
+                )
+            ]
     else:
         years = [year]
 
@@ -82,5 +91,5 @@ def main(year: int = ALL_YEARS) -> None:
             download_and_unzip(url)
         except FileNotFoundError:
             continue
-    
+
     print("Todos os arquivos foram baixados e extraídos.")

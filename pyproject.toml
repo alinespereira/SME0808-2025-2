@@ -30,6 +30,8 @@ dependencies = [
 tsa = "tsa.main:main"
 downloader = "cli.downloader:main"
 build-db = "cli.build_database:main"
+create-tables = "cli.create_tables:main"
+populate-db = "cli.populate_database:main"
 validate-db = "cli.validate_database:main"
 
 [build-system]

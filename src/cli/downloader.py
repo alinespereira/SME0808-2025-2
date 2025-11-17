@@ -1,11 +1,13 @@
+import logging
 import zipfile
 from pathlib import Path
 
 import click
 import httpx
 
-from tsa import settings
+from tsa import Logger, settings
 
+logger = Logger(__name__, level=logging.INFO)
 ALL_YEARS: int = -1
 
 
@@ -87,8 +89,12 @@ def main(year: int = ALL_YEARS) -> None:
 
     for year in years:
         try:
+            logger.info(f"Baixando dados do ano {year}...")
             url = f"https://portal.inmet.gov.br/uploads/dadoshistoricos/{year}.zip"
             download_and_unzip(url)
+            logger.info(
+                f"Dados do ano {year} baixados e extraídos com sucesso."
+            )
         except FileNotFoundError:
             continue
 

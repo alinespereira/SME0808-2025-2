@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+import chardet
 import click
 import pandas as pd
 from sqlmodel import Session, select, text
@@ -87,6 +88,28 @@ OBSERVATION_MAP = {
     "vento_velocidade_horaria_m_s": "wind_speed",
 }
 
+COLUMNS = [
+    "data",
+    "hora_utc",
+    "precipitacao_total_horario_mm",
+    "pressao_atmosferica_ao_nivel_da_estacao_horaria_mb",
+    "pressao_atmosferica_max_na_hora_ant_aut_mb",
+    "pressao_atmosferica_min_na_hora_ant_aut_mb",
+    "radiacao_global_kj_m2",
+    "temperatura_do_ar_bulbo_seco_horaria_c",
+    "temperatura_do_ponto_de_orvalho_c",
+    "temperatura_maxima_na_hora_ant_aut_c",
+    "temperatura_minima_na_hora_ant_aut_c",
+    "temperatura_orvalho_max_na_hora_ant_aut_c",
+    "temperatura_orvalho_min_na_hora_ant_aut_c",
+    "umidade_rel_max_na_hora_ant_aut",
+    "umidade_rel_min_na_hora_ant_aut",
+    "umidade_relativa_do_ar_horaria",
+    "vento_direcao_horaria_gr_gr",
+    "vento_rajada_maxima_m_s",
+    "vento_velocidade_horaria_m_s",
+]
+
 
 @dataclass(frozen=True)
 class StationMetadata:
@@ -99,6 +122,14 @@ class StationMetadata:
     altitude: float
     start_date: str | None
     city_name: str | None
+
+
+def find_encoding(file_path: Path) -> str:
+    with file_path.open("rb") as f:
+        raw_data = f.read(10000)
+    result = chardet.detect(raw_data)
+    encoding = result["encoding"] or "utf-8"
+    return encoding
 
 
 def normalize_token(value: str) -> str:
@@ -163,18 +194,19 @@ def _to_float(raw: str) -> float:
 
 
 def load_observations(csv_path: Path) -> pd.DataFrame:
+    encoding = find_encoding(csv_path)
     df = pd.read_csv(  # type: ignore[call-overload]
         csv_path,
         sep=";",
         skiprows=META_ROWS,
-        encoding="latin-1",
+        encoding=encoding,
         decimal=",",
         na_values=["-9999", -9999],
         engine="python",
     )
     df = df.loc[:, ~df.columns.str.contains("^Unnamed", case=False, na=False)]
-    normalized_cols = [normalize_token(str(col)) for col in df.columns]
-    df.columns = normalized_cols
+    # normalized_cols = [normalize_token(str(col)) for col in df.columns]
+    df.columns = COLUMNS
     df = df.dropna(how="all", subset=OBSERVATION_MAP)
 
     required = {"data", "hora_utc"}
@@ -186,7 +218,7 @@ def load_observations(csv_path: Path) -> pd.DataFrame:
 
     df = df.assign(
         datetime=pd.to_datetime(
-            df["data"] + " " + df["hora_utc"],
+            df["data"].str.replace("/", "-") + " " + df["hora_utc"],
             format="%Y-%m-%d %H:%M",
             errors="coerce",
         )
@@ -370,6 +402,7 @@ def main(data_dir: Path, pattern: str, truncate: bool = False) -> None:
                 station = ensure_station(session, metadata, state.id, city.id)
 
                 observations_df = load_observations(csv_path)
+                logger.info(f"{len(observations_df)} observações carregadas.")
                 for chunk in _chunked(
                     iter_observations(observations_df, station.id), size=500
                 ):

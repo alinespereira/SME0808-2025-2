@@ -1,8 +1,8 @@
 from sqlalchemy.engine import ScalarResult
 from sqlmodel import select
 
-from .base import BaseDAO
 from ..models import State
+from .base import BaseDAO
 
 
 class StateDAO(BaseDAO[State]):
